@@ -50,17 +50,28 @@ public final class Event {
         ));
     }
 
-    public static final class toEvent implements MapFunction<Tuple8<Integer,Integer,Integer,Integer,Integer,Integer,Integer,Integer>, Event> {
+    public static final class toEvent implements MapFunction<String, Event> {
         @Override
-        public Event map(Tuple8<Integer,Integer,Integer,Integer,Integer,Integer,Integer,Integer> in) {
-            return (new Event(in));
+        public Event map(String in) {
+            String[] s = in.split(",");
+
+            return (new Event(
+                Integer.parseInt(s[0]),
+                Integer.parseInt(s[1]),
+                Integer.parseInt(s[2]),
+                Integer.parseInt(s[3]),
+                Integer.parseInt(s[4]),
+                Integer.parseInt(s[5]),
+                Integer.parseInt(s[6]),
+                Integer.parseInt(s[7]))
+            );
         }
     }
 
-    public static final class toTuple implements MapFunction<Event, Tuple8<Integer,Integer,Integer,Integer,Integer,Integer,Integer,Integer>> {
-        @Override
-        public Tuple8<Integer,Integer,Integer,Integer,Integer,Integer,Integer,Integer> map(Event in) {
-            return (in.toTuple());
-        }
-    }
+    // public static final class toTuple implements MapFunction<Event, Tuple8<Integer,Integer,Integer,Integer,Integer,Integer,Integer,Integer>> {
+    //     @Override
+    //     public Tuple8<Integer,Integer,Integer,Integer,Integer,Integer,Integer,Integer> map(Event in) {
+    //         return (in.toTuple());
+    //     }
+    // }
 }

@@ -1,7 +1,8 @@
 package master2017.flink;
 
 import org.apache.flink.api.java.DataSet;
-import org.apache.flink.api.java.ExecutionEnvironment;
+import org.apache.flink.streaming.api.datastream.DataStreamSource;
+import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.FilterFunction;
 import org.apache.flink.api.common.functions.FlatMapFunction;
@@ -9,6 +10,7 @@ import org.apache.flink.api.common.functions.GroupReduceFunction;
 import org.apache.flink.api.common.operators.Order;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.core.fs.FileSystem;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.util.Collector;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -21,20 +23,26 @@ import java.util.Comparator;
 public class VehicleTelematics {
     public static void main(String[] args) throws Exception {
         // set up the execution environment
-        final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+        final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-        DataSet<Event> events =
-            env.readCsvFile(args[0]).pojoType(
-                Event.class,
-                "time",
-                "vid",
-                "speed",
-                "xWay",
-                "lane",
-                "dir",
-                "seg",
-                "pos"
-            );
+        DataStream<Event> events =
+            env.readTextFile(args[0])
+
+            // .setParallelism(env.getParallelism())
+
+            .map(new Event.toEvent());
+
+            // .pojoType(
+            //     Event.class,
+            //     "time",
+            //     "vid",
+            //     "speed",
+            //     "xWay",
+            //     "lane",
+            //     "dir",
+            //     "seg",
+            //     "pos"
+            // );
 
         /**
          * Speed Radar
@@ -44,51 +52,49 @@ public class VehicleTelematics {
 
         .flatMap(new SpeedRadar())
 
-        .groupBy(1)
-
-        .first(1)
-
-        .writeAsCsv(args[1] + "/speedfines.csv", "\n", ",", FileSystem.WriteMode.OVERWRITE);
+        .writeAsCsv(args[1] + "/speedfines.csv", FileSystem.WriteMode.OVERWRITE, "\n", ",");
         
         /**
          * Average Speed Control Segment
          */
         
-        events
+        // events
 
-        .filter(new InsideControlSegment())
+        // .filter(new InsideControlSegment())
 
-        .groupBy(new SelectorVID())
+        // .groupBy(new SelectorVID())
 
-        .reduceGroup(new AvgInCompleteSegment())
+        // .reduceGroup(new AvgInCompleteSegment())
 
-        .filter(new AboveAvgSpeedSegment())
+        // .filter(new AboveAvgSpeedSegment())
 
-        .writeAsCsv(args[1] + "/avgspeedfines.csv", "\n", ",", FileSystem.WriteMode.OVERWRITE);
+        // .writeAsCsv(args[1] + "/avgspeedfines.csv", "\n", ",", FileSystem.WriteMode.OVERWRITE);
 
         /**
          * Accidents
          */
 
-        events
+        // events
 
-        .filter(new StopedVehicle())
+        // .filter(new StopedVehicle())
 
-        .groupBy(new SelectorVID())
+        // .groupBy(new SelectorVID())
 
-        .sortGroup(new SelectorTime(), Order.ASCENDING)
+        // .sortGroup(new SelectorTime(), Order.ASCENDING)
 
-        .reduceGroup(new SamePositionEvent())
+        // .reduceGroup(new SamePositionEvent())
 
-        .flatMap(new AccidentVehicle())
+        // .flatMap(new AccidentVehicle())
 
-        .writeAsCsv(args[1] + "/accidents.csv", "\n", ",", FileSystem.WriteMode.OVERWRITE);
+        // .writeAsCsv(args[1] + "/accidents.csv", "\n", ",", FileSystem.WriteMode.OVERWRITE);
 
         try {
             env.execute("VehicleTelematics");
         } catch(Exception e)  {
             e.printStackTrace();
         }
+
+        // System.out.println(events.getParallelism());
     }
 
     //
