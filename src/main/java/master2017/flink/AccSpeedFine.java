@@ -1,11 +1,11 @@
 package master2017.flink;
 
-import org.apache.flink.api.java.functions.KeySelector;
 import java.util.ArrayList;
+import org.apache.flink.api.java.functions.KeySelector;
 
 public class AccSpeedFine {
-    public long time1;
-    public long time2;
+    public long min;
+    public long max;
     public int vid;
     public int speed;
     public int xWay;
@@ -14,8 +14,8 @@ public class AccSpeedFine {
     public ArrayList<Integer> segments;
 
     public AccSpeedFine(Event e) {
-        this.time1 = e.time;
-        this.time2 = e.time;
+        this.min = e.time;
+        this.max = e.time;
         this.vid = e.vid;
         this.speed = e.speed;
         this.xWay = e.xWay;
@@ -25,6 +25,10 @@ public class AccSpeedFine {
         this.segments.add(e.seg);
     }
 
+    /**
+     * Implements a key selector for the AccSpeedFine class. The unique
+     * identifier for each AccSpeedFine event is the vehicle id (vid). 
+     */
     public static class SelectorVID
     implements KeySelector<AccSpeedFine, Integer> {
         @Override
