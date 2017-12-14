@@ -4,7 +4,7 @@ import org.apache.flink.api.java.tuple.Tuple8;
 import org.apache.flink.api.common.functions.MapFunction;
 
 public final class Event {
-    public int time;
+    public long time;
     public int vid;
     public int speed;
     public int xWay;
@@ -15,7 +15,7 @@ public final class Event {
 
     public Event() { }
 
-    public Event(int f0, int f1, int f2, int f3, int f4, int f5, int f6, int f7) {
+    public Event(long f0, int f1, int f2, int f3, int f4, int f5, int f6, int f7) {
         this.time  = f0;
         this.vid   = f1;
         this.speed = f2;
@@ -26,7 +26,7 @@ public final class Event {
         this.pos   = f7;
     }
 
-    public Event(Tuple8<Integer,Integer,Integer,Integer,Integer,Integer,Integer,Integer> t) {
+    public Event(Tuple8<Long,Integer,Integer,Integer,Integer,Integer,Integer,Integer> t) {
         this.time = t.f0;
         this.vid = t.f1;
         this.speed = t.f2;
@@ -37,8 +37,8 @@ public final class Event {
         this.pos = t.f7;
     }
 
-    public Tuple8<Integer,Integer,Integer,Integer,Integer,Integer,Integer,Integer> toTuple() {
-        return (new Tuple8<Integer,Integer,Integer,Integer,Integer,Integer,Integer,Integer>(
+    public Tuple8<Long,Integer,Integer,Integer,Integer,Integer,Integer,Integer> toTuple() {
+        return (new Tuple8<Long,Integer,Integer,Integer,Integer,Integer,Integer,Integer>(
             time,
             vid,
             speed,
