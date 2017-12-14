@@ -1,30 +1,17 @@
 package master2017.flink;
 
-import org.apache.flink.api.java.DataSet;
-import org.apache.flink.streaming.api.datastream.DataStreamSource;
-import org.apache.flink.streaming.api.datastream.DataStream;
+import java.util.Iterator;
+import java.util.ArrayList;
+import org.apache.flink.util.Collector;
+import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.FilterFunction;
 import org.apache.flink.api.common.functions.FlatMapFunction;
-import org.apache.flink.api.common.functions.GroupReduceFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
-import org.apache.flink.api.common.operators.Order;
-import org.apache.flink.api.java.functions.KeySelector;
-import org.apache.flink.streaming.api.windowing.time.Time;
-import org.apache.flink.core.fs.FileSystem;
-import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
+import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.windowing.windows.GlobalWindow;
-import org.apache.flink.streaming.api.windowing.assigners.GlobalWindows;
 import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
-import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
-import org.apache.flink.streaming.api.TimeCharacteristic;
-import org.apache.flink.streaming.api.functions.timestamps.AscendingTimestampExtractor;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
-import org.apache.flink.util.Collector;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.Comparator;
 
 /**
  * Implements the "VehicleTelematics" program that analize the vehicles speed on
@@ -35,46 +22,18 @@ public class VehicleTelematics {
         // set up the execution environment
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-        env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
-
         DataStream<Event> events =
-            env.readTextFile(args[0])
-
-            // .setParallelism(env.getParallelism())
-
-            .map(new Event.toEvent());
-
-            // .assignTimestampsAndWatermarks(new AscendingTimestampExtractor<Event>() {
-            //     @Override
-            //     public long extractAscendingTimestamp(Event e) {
-            //         return (e.time * 1000);
-            //     }
-            // });
+            env.readTextFile(args[0]).map(new ToEvent());
 
         /**
          * Speed Radar
          */
         
-        // events
+        events
 
-        // .windowAll(TumblingEventTimeWindows((long)100,(long)0))
+        .flatMap(new SpeedRadar())
 
-        // .flatMap(new SpeedRadar())
-
-        // .keyBy(new SelectorVID())
-
-        // .window(TumblingEventTimeWindows.of(Time.seconds(100)))
-
-        // .apply(new WindowFunction<Event, SpeedFine, Integer, TimeWindow>() {
-        //     public void apply(Integer key, TimeWindow window, Iterable<Event> events, Collector<SpeedFine> out) {
-        //         System.out.println("-------> " + key);
-        //         // for (Event e : events) {
-        //         //     if (e.speed > 90) { out.collect(new SpeedFine(e.time, e.vid, e.xWay, e.seg, e.dir, e.speed)); }
-        //         // }
-        //     }
-        // })
-
-        // .writeAsCsv(args[1] + "/speedfines.csv", FileSystem.WriteMode.OVERWRITE, "\n", ",");
+        .writeAsCsv(args[1] + "/speedfines.csv", FileSystem.WriteMode.OVERWRITE, "\n", ",");
         
         /**
          * Average Speed Control Segment
@@ -100,57 +59,69 @@ public class VehicleTelematics {
          * Accidents
          */
 
-        // events
+        events
 
-        // .filter(new StopedVehicle())
+        .filter(new StopedVehicle())
 
-        // .groupBy(new SelectorVID())
+        .keyBy(new Event.SelectorVID())
 
-        // .sortGroup(new SelectorTime(), Order.ASCENDING)
+        .countWindow(4,1)
 
-        // .reduceGroup(new SamePositionEvent())
+        .apply(new AccidentVehicle())
 
-        // .flatMap(new AccidentVehicle())
-
-        // .writeAsCsv(args[1] + "/accidents.csv", "\n", ",", FileSystem.WriteMode.OVERWRITE);
+        .writeAsCsv(args[1] + "/accidents.csv", FileSystem.WriteMode.OVERWRITE, "\n", ",");
 
         try {
             env.execute("VehicleTelematics");
         } catch(Exception e)  {
             e.printStackTrace();
         }
-
-        // System.out.println(events.getParallelism());
     }
 
-    //
-    //  User Functions
-    //
+    /////////////////////
+    //  Map Functions  //
+    /////////////////////
 
-    public static final class AccidentVehicle
-    implements FlatMapFunction<Object[],Accident> {
-        public static void add(Event begin, Event end, Collector<Accident> o) {
-            o.collect(
-                new Accident(begin.time,end.time,begin.vid,begin.xWay,begin.seg,begin.dir,begin.pos)
-            );
-        }
-
+    /**
+     * Implements a map function to transform a String from a CSV file (a line),
+     * into an Event instance.
+     */
+    public static final class ToEvent
+    implements MapFunction<String, Event> {
         @Override
-        public void flatMap(Object[] es, Collector<Accident> out) {
-            for (int i = 3; i < es.length; i++) {
-                if (
-                    ((Event) es[i-3]).pos == 
-                    ((Event) es[i-2]).pos &&
-                    ((Event) es[i-2]).pos ==
-                    ((Event) es[i-1]).pos &&
-                    ((Event) es[i-1]).pos ==
-                    ((Event) es[i]).pos 
-                ) {
-                    add((Event)es[i-3],(Event)es[i],out);
-                }
-            }
+        public Event map(String in) {
+            String[] s = in.split(",");
+
+            return new 
+                Event(
+                    Integer.parseInt(s[0]),
+                    Integer.parseInt(s[1]),
+                    Integer.parseInt(s[2]),
+                    Integer.parseInt(s[3]),
+                    Integer.parseInt(s[4]),
+                    Integer.parseInt(s[5]),
+                    Integer.parseInt(s[6]),
+                    Integer.parseInt(s[7])
+                )
+            ;
         }
     }
+
+    /**
+     * Implements a map function to convert an Event instance into a SpeedFine
+     * accumulator. It's used to get the average speed within a segment.
+     */
+    public static final class ToAccSpeedFine
+    implements MapFunction<Event,AccSpeedFine> {
+        @Override
+        public AccSpeedFine map(Event e) {
+            return new AccSpeedFine(e);
+        }
+    }
+
+    //////////////////////////
+    //  Flat Map Functions  //
+    //////////////////////////
 
     /**
      * Implements a filter like function as flatMap. Collecting every event with
@@ -168,21 +139,11 @@ public class VehicleTelematics {
     }
 
     /**
-     * Implements a filter function to discard events outside the control
-     * segment of the express way. Leaving the dataSet only with events with the
-     * field 'seg' between [52,56].
+     * Implements a function to collect every AccSpeedFine within a specific
+     * segment, omiting those outside of it. The AccSpeedFine instance is an
+     * accumulator. It has a field with the accumulated segments, which is used
+     * to check if the measure is valid.
      */
-    public static final class InsideControlSegment
-    implements FilterFunction<Event> {
-        @Override
-        public boolean filter(Event e) {
-            if (52 <= e.seg && e.seg <= 56) {
-                return true;
-            }
-            return false;
-        }
-    }
-
     public static final class InCompleteSegment
     implements FlatMapFunction<AccSpeedFine,AvgSpeedFine> {
         @Override
@@ -199,8 +160,28 @@ public class VehicleTelematics {
 
             if (inSegment) {
                 int average = e.speed / e.n_event;
-                out.collect(new AvgSpeedFine(e.time1,e.time2,e.vid,e.xWay,e.dir,average));
+                out.collect(new AvgSpeedFine(e.min,e.max,e.vid,e.xWay,e.dir,average));
             }
+        }
+    }
+
+    ////////////////////////
+    //  Filter Functions  //
+    ////////////////////////
+
+    /**
+     * Implements a filter function to discard events outside the control
+     * segment of the express way. Leaving the dataStream only events with the
+     * field 'seg' between [52,56].
+     */
+    public static final class InsideControlSegment
+    implements FilterFunction<Event> {
+        @Override
+        public boolean filter(Event e) {
+            if (52 <= e.seg && e.seg <= 56) {
+                return true;
+            }
+            return false;
         }
     }
 
@@ -220,6 +201,10 @@ public class VehicleTelematics {
         }
     }
 
+    /**
+     * Implements the filter function to get the events with the zero (0) speed.
+     * It's used to search for accidented vehicles.
+     */
     public static final class StopedVehicle
     implements FilterFunction<Event> {
         @Override
@@ -231,17 +216,28 @@ public class VehicleTelematics {
         }
     }
 
+    ////////////////////////
+    //  Reduce Functions  //
+    ////////////////////////
+
+    /**
+     * Implements a reduce function to fold the accumulators events into a
+     * unique instance, which is filtered after by a specific criteria. Asigning
+     * the minimum time in 'min', the maximum time in 'max', the total speed
+     * in 'speed', the number of reduced events in 'n_event' and keeping the 
+     * visited segments by the vehicle in an ArrayList<Integer>.
+     */
     public static final class MergeAccSpeedFine
     implements ReduceFunction<AccSpeedFine> {
         @Override
         public AccSpeedFine reduce(AccSpeedFine e1, AccSpeedFine e2) {
-            if (e1.time1 > e2.time1) { e1.time1 = e2.time1; } // Min time
+            if (e1.min > e2.min) { e1.min = e2.min; } // Min time
 
-            if (e1.time2 < e2.time2) { e1.time2 = e2.time2; } // Max time
+            if (e1.max < e2.max) { e1.max = e2.max; } // Max time
 
             e1.speed += e2.speed; // Accumulated speed
 
-            e1.n_event += 1; // Events counter
+            e1.n_event += e2.n_event; // Events counter
 
             e1.segments.addAll(e2.segments); // Segments visited
 
@@ -249,106 +245,48 @@ public class VehicleTelematics {
         }
     }
 
+    ////////////////////////
+    //  Window Functions  //
+    ////////////////////////
+
     /**
-     * Implements a key selector for the Event class. The unique identifier for
-     * each event is the vehicle id (vid). 
+     * Implements a window function with IN values of class Event, OUT values of
+     * class Accident, KEY values by vid and with tumbling windows. The main
+     * propuse of this class/method is to check if the events in the window have
+     * the same position. Also, the amount of events must be exactly four (4).
+     * It's important to keep the minimum time (begining) and maximum time (end).
      */
-    public static class SelectorVID
-    implements KeySelector<Event, Integer> {
+    public static final class AccidentVehicle
+    implements WindowFunction<Event, Accident, Integer, GlobalWindow> {
         @Override
-        public Integer getKey(Event e) {
-            return e.vid;
-        }
-    }
+        public void apply(Integer key, GlobalWindow window, Iterable<Event> events, Collector<Accident> out) {
 
-    public static class SelectorTime
-    implements KeySelector<Event, Long> {
-        @Override
-        public Long getKey(Event e) {
-            return e.time;
-        }
-    }
+            Iterator<Event> it = events.iterator();
 
-    public static class SelectorVIDTime
-    implements KeySelector<Event, VIDTime> {
-        @Override
-        public VIDTime getKey(Event e) {
-            return (new VIDTime(e.vid,e.time));
-        }
-    }
+            Event e1 = it.next();
+            Event e2;
 
-    public static class ToAccSpeedFine
-    implements MapFunction<Event,AccSpeedFine> {
-        @Override
-        public AccSpeedFine map(Event e) {
-            return new AccSpeedFine(e);
-        }
-    }
+            long begin_time = e1.time;
+            long end_time = e1.time;
 
-    public static final class AvgInCompleteSegment
-    implements GroupReduceFunction<Event,AvgSpeedFine> {
-        @Override
-        public void reduce(Iterable<Event> group, Collector<AvgSpeedFine> out) {
-            int[] aux = {52,53,54,55,56};
-
-            ArrayList<Integer> segments = new ArrayList<Integer>(6);
-
-            for (int i : aux) { segments.add(i); }
-
-            Iterator<Event> it = group.iterator();
-
-            Event current = it.next();
-
-            long time_min = current.time;
-            long time_max = current.time;
-            int vid = current.vid;
-            int xWay = current.xWay;
-            int dir = current.dir;
-
-            int average = current.speed;
-            int events = 1;
+            boolean same_pos = true;
+            int n = 1;
 
             while (it.hasNext()) {
-                current = it.next();
-                events += 1;
+                e2 = it.next();
 
-                segments.remove(new Integer(current.seg));
+                if (e1.pos != e2.pos) { same_pos = false; break; }
 
-                if (current.time < time_min) { time_min = current.time; }
-                if (current.time > time_max) { time_max = current.time; }
-                average += current.speed;
+                if (begin_time > e2.time) { begin_time = e2.time; }
+                if (end_time < e2.time) { end_time = e2.time; }
+
+                n++;
+                e1 = e2;
             }
 
-            average = average / events;
-
-            if (segments.isEmpty()) {
-                out.collect(new AvgSpeedFine(time_min,time_max,vid,xWay,dir,average));
+            if (same_pos && n == 4) {
+                out.collect(new Accident(begin_time,end_time,e1.vid,e1.xWay,e1.seg,e1.dir,e1.pos));
             }
-        }
-    }
-
-    public static final class SamePositionEvent
-    implements GroupReduceFunction<Event,Object[]> {
-        @Override
-        public void reduce(Iterable<Event> group, Collector<Object[]> out) {
-            Iterator<Event> it = group.iterator();
-
-            Event previous = it.next();
-            Event current;
-
-            ArrayList<Event> event_list = new ArrayList<Event>();
-
-            while (it.hasNext()) {
-                current = it.next();
-                event_list.add(previous);
-
-                if (previous.pos == current.pos && !it.hasNext()) {
-                    event_list.add(current);
-                }
-                previous = current;
-            }
-
-            out.collect(event_list.toArray());
         }
     }
 }
