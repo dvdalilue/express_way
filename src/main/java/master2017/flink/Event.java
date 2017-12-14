@@ -1,7 +1,7 @@
 package master2017.flink;
 
 import org.apache.flink.api.java.tuple.Tuple8;
-import org.apache.flink.api.common.functions.MapFunction;
+import org.apache.flink.api.java.functions.KeySelector;
 
 public final class Event {
     public long time;
@@ -12,8 +12,6 @@ public final class Event {
     public int dir;
     public int seg;
     public int pos;
-
-    public Event() { }
 
     public Event(long f0, int f1, int f2, int f3, int f4, int f5, int f6, int f7) {
         this.time  = f0;
@@ -27,51 +25,25 @@ public final class Event {
     }
 
     public Event(Tuple8<Long,Integer,Integer,Integer,Integer,Integer,Integer,Integer> t) {
-        this.time = t.f0;
-        this.vid = t.f1;
+        this.time  = t.f0;
+        this.vid   = t.f1;
         this.speed = t.f2;
-        this.xWay = t.f3;
-        this.lane = t.f4;
-        this.dir = t.f5;
-        this.seg = t.f6;
-        this.pos = t.f7;
+        this.xWay  = t.f3;
+        this.lane  = t.f4;
+        this.dir   = t.f5;
+        this.seg   = t.f6;
+        this.pos   = t.f7;
     }
 
-    public Tuple8<Long,Integer,Integer,Integer,Integer,Integer,Integer,Integer> toTuple() {
-        return (new Tuple8<Long,Integer,Integer,Integer,Integer,Integer,Integer,Integer>(
-            time,
-            vid,
-            speed,
-            xWay,
-            lane,
-            dir,
-            seg,
-            pos
-        ));
-    }
-
-    public static final class toEvent implements MapFunction<String, Event> {
+    /**
+     * Implements a key selector for the Event class. The unique identifier for
+     * each event is the vehicle id (vid). 
+     */
+    public static final class SelectorVID
+    implements KeySelector<Event, Integer> {
         @Override
-        public Event map(String in) {
-            String[] s = in.split(",");
-
-            return (new Event(
-                Integer.parseInt(s[0]),
-                Integer.parseInt(s[1]),
-                Integer.parseInt(s[2]),
-                Integer.parseInt(s[3]),
-                Integer.parseInt(s[4]),
-                Integer.parseInt(s[5]),
-                Integer.parseInt(s[6]),
-                Integer.parseInt(s[7]))
-            );
+        public Integer getKey(Event e) {
+            return e.vid;
         }
     }
-
-    // public static final class toTuple implements MapFunction<Event, Tuple8<Integer,Integer,Integer,Integer,Integer,Integer,Integer,Integer>> {
-    //     @Override
-    //     public Tuple8<Integer,Integer,Integer,Integer,Integer,Integer,Integer,Integer> map(Event in) {
-    //         return (in.toTuple());
-    //     }
-    // }
 }
