@@ -23,7 +23,7 @@ public class VehicleTelematics {
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
         DataStream<Event> events =
-            env.readTextFile(args[0]).map(new ToEvent());
+            env.readTextFile(args[0]).setParallelism(1).map(new ToEvent());
 
         /**
          * Speed Radar
@@ -59,15 +59,17 @@ public class VehicleTelematics {
          * Accidents
          */
 
+        final int windowSize = 4;
+
         events
 
         .filter(new StopedVehicle())
 
         .keyBy(new Event.SelectorVID())
 
-        .countWindow(4,1)
+        .countWindow(windowSize,1)
 
-        .apply(new AccidentVehicle())
+        .apply(new AccidentVehicle(windowSize))
 
         .writeAsCsv(args[1] + "/accidents.csv", FileSystem.WriteMode.OVERWRITE, "\n", ",");
 
@@ -258,6 +260,12 @@ public class VehicleTelematics {
      */
     public static final class AccidentVehicle
     implements WindowFunction<Event, Accident, Integer, GlobalWindow> {
+        private int window_size;
+
+        public AccidentVehicle(int w) {
+            this.window_size = w;
+        }
+
         @Override
         public void apply(Integer key, GlobalWindow window, Iterable<Event> events, Collector<Accident> out) {
 
@@ -284,7 +292,7 @@ public class VehicleTelematics {
                 e1 = e2;
             }
 
-            if (same_pos && n == 4) {
+            if (same_pos && n == this.window_size) {
                 out.collect(new Accident(begin_time,end_time,e1.vid,e1.xWay,e1.seg,e1.dir,e1.pos));
             }
         }
